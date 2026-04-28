@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.sqlite3
+.env
+
+# Node
+node_modules/
+.npm/
+yarn-error.log*
+npm-debug.log*
+.pnp.*
+.cache/
+coverage/
+build/
+dist/
+
+# VS Code
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+logs/
+*.log
