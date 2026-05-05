@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -55,7 +55,7 @@ function DragHandler({ isDragging, selectedItem, onPositionUpdate, glasswarePosi
 const tapPosition = [4.5, 0.95, 0];
 
 // Interactive Beaker with drag functionality and water levels
-function InteractiveBeaker({ id, initialPosition, color = '#E8F4F8', onSelect, isSelected, isHeating, isCooling, isPouring, onDragStart, onDragEnd, onPositionUpdate, waterLevel = 0.5 }) {
+function InteractiveBeaker({ id, initialPosition, color = '#E8F4F8', onSelect, isSelected, isHeating, isCooling, isPouring, onDragStart, onDragEnd, onPositionUpdate, waterLevel = 0.5, isBroken, isFrozen }) {
   const groupRef = useRef();
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -65,13 +65,15 @@ function InteractiveBeaker({ id, initialPosition, color = '#E8F4F8', onSelect, i
       ref={groupRef} 
       position={initialPosition}
       onClick={(e) => {
-        e.stopPropagation();
-        onSelect(id);
+        if (!isBroken) {
+          e.stopPropagation();
+          onSelect(id);
+        }
       }}
       onPointerOver={() => setIsHovered(true)}
       onPointerOut={() => setIsHovered(false)}
       onPointerDown={(e) => {
-        if (isSelected) {
+        if (isSelected && !isBroken) {
           e.stopPropagation();
           setIsDragging(true);
           onDragStart(id);
@@ -85,138 +87,179 @@ function InteractiveBeaker({ id, initialPosition, color = '#E8F4F8', onSelect, i
         }
       }}
     >
-      {/* Beaker body */}
-      <mesh>
-        <cylinderGeometry args={[0.35, 0.38, 0.75, 32]} />
-        <meshStandardMaterial 
-          color={color} 
-          transparent 
-          opacity={0.6}
-          roughness={0.1}
-          metalness={0.1}
-          emissive={isHeating ? '#FF4500' : isCooling ? '#00BFFF' : '#000000'}
-          emissiveIntensity={isHeating || isCooling ? 0.3 : 0}
-        />
-      </mesh>
-
-      {/* Water level */}
-      {waterLevel > 0 && (
-        <mesh position={[0, -0.375 + (waterLevel * 0.75 * 0.5), 0]}>
-          <cylinderGeometry args={[0.32, 0.32, waterLevel * 0.75, 32]} />
-          <meshStandardMaterial 
-            color="#4169E1" 
-            transparent 
-            opacity={0.8}
-            emissive="#4169E1"
-            emissiveIntensity={0.1}
-          />
-        </mesh>
-      )}
-
-      {/* Beaker rim */}
-      <mesh position={[0, 0.4, 0]}>
-        <torusGeometry args={[0.38, 0.08, 16, 32]} />
-        <meshStandardMaterial color="#C0C0C0" metalness={0.8} roughness={0.2} />
-      </mesh>
-
-      {/* Temperature effects */}
-      {(isHeating || isCooling) && (
-        <mesh position={[0, 0.15, 0]}>
-          <sphereGeometry args={[0.4, 16, 16]} />
-          <meshStandardMaterial 
-            color={isHeating ? '#FF6347' : '#87CEEB'}
-            emissive={isHeating ? '#FF4500' : '#00BFFF'}
-            emissiveIntensity={0.5}
-            transparent
-            opacity={0.3}
-          />
-        </mesh>
-      )}
-
-      {/* Pouring effect */}
-      {isPouring && (
-        <group position={[0.5, 0.3, 0]}>
-          {/* Liquid stream */}
-          <mesh rotation={[0, 0, -Math.PI/4]}>
-            <coneGeometry args={[0.05, 0.3, 8]} />
-            <meshStandardMaterial 
-              color="#4169E1" 
-              transparent 
-              opacity={0.7}
-              emissive="#4169E1"
-              emissiveIntensity={0.2}
-            />
-          </mesh>
-          {/* Droplets */}
-          {[...Array(3)].map((_, i) => (
-            <mesh key={i} position={[0.2 + i * 0.1, -0.1 - i * 0.05, 0]}>
-              <sphereGeometry args={[0.02, 8, 8]} />
-              <meshStandardMaterial 
-                color="#4169E1" 
-                transparent 
-                opacity={0.8}
-                emissive="#4169E1"
-                emissiveIntensity={0.3}
-              />
+      {/* Broken glass effect */}
+      {isBroken ? (
+        <>
+          {/* Shattered fragments */}
+          {[...Array(5)].map((_, i) => (
+            <mesh key={i} position={[Math.random() * 0.4 - 0.2, Math.random() * 0.2, Math.random() * 0.4 - 0.2]}>
+              <boxGeometry args={[0.1, 0.1, 0.05]} />
+              <meshStandardMaterial color="#808080" opacity={0.6} transparent />
             </mesh>
           ))}
-        </group>
-      )}
+          <Html position={[0, 0.5, 0]}>
+            <div style={{
+              color: '#FF0000',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              background: 'rgba(0,0,0,0.8)',
+              padding: '4px 8px',
+              borderRadius: '3px',
+              pointerEvents: 'none'
+            }}>💔 BROKEN</div>
+          </Html>
+        </>
+      ) : (
+        <>
+          {/* Beaker body */}
+          <mesh>
+            <cylinderGeometry args={[0.35, 0.38, 0.75, 32]} />
+            <meshStandardMaterial 
+              color={isFrozen ? '#B0E0E6' : color}
+              transparent 
+              opacity={0.6}
+              roughness={0.1}
+              metalness={0.1}
+              emissive={isHeating ? '#FF4500' : isCooling || isFrozen ? '#00BFFF' : '#000000'}
+              emissiveIntensity={isHeating || isCooling || isFrozen ? 0.3 : 0}
+            />
+          </mesh>
 
-      {/* Selection highlight */}
-      {isSelected && (
-        <mesh position={[0, 0, 0]}>
-          <cylinderGeometry args={[0.42, 0.42, 0.8, 32]} />
-          <meshStandardMaterial 
-            color="#FFD700" 
-            wireframe 
-            opacity={0.8}
-            transparent
-          />
-        </mesh>
-      )}
+          {/* Water level */}
+          {waterLevel > 0 && (
+            <mesh position={[0, -0.375 + (waterLevel * 0.75 * 0.5), 0]}>
+              <cylinderGeometry args={[0.32, 0.32, waterLevel * 0.75, 32]} />
+              <meshStandardMaterial 
+                color={isFrozen ? '#87CEEB' : '#4169E1'}
+                transparent 
+                opacity={isFrozen ? 0.6 : 0.8}
+                emissive={isFrozen ? '#00BFFF' : '#4169E1'}
+                emissiveIntensity={isFrozen ? 0.2 : 0.1}
+              />
+            </mesh>
+          )}
 
-      {/* Drag indicator */}
-      {isDragging && (
-        <mesh position={[0, 0.8, 0]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial 
-            color="#00FF00" 
-            emissive="#00FF00"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-      )}
+          {/* Beaker rim */}
+          <mesh position={[0, 0.4, 0]}>
+            <torusGeometry args={[0.38, 0.08, 16, 32]} />
+            <meshStandardMaterial color="#C0C0C0" metalness={0.8} roughness={0.2} />
+          </mesh>
 
-      {/* Hover tooltip */}
-      {isHovered && (
-        <Html position={[0, 0.6, 0]}>
-          <div style={{
-            background: 'rgba(0,0,0,0.8)',
-            color: '#FFFFFF',
-            padding: '6px 10px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontFamily: 'Arial, sans-serif',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            border: '1px solid #CCCCCC'
-          }}>
-            Beaker {id} - ISO 384 Standard | R: Raise | F: Lower | E: Pour | C: Cool | H: Heat
-            <div>Water Level: {Math.round(waterLevel * 100)}%</div>
-            {isHeating && <div style={{color: '#FF6347'}}>🔥 Heating</div>}
-            {isCooling && <div style={{color: '#00BFFF'}}>❄️ Cooling</div>}
-            {isPouring && <div style={{color: '#4169E1'}}>💧 Pouring</div>}
-            {isDragging && <div style={{color: '#00FF00'}}>🖱️ Dragging</div>}
-          </div>
-        </Html>
+          {/* Temperature effects */}
+          {(isHeating || isCooling) && (
+            <mesh position={[0, 0.15, 0]}>
+              <sphereGeometry args={[0.4, 16, 16]} />
+              <meshStandardMaterial 
+                color={isHeating ? '#FF6347' : '#87CEEB'}
+                emissive={isHeating ? '#FF4500' : '#00BFFF'}
+                emissiveIntensity={0.5}
+                transparent
+                opacity={0.3}
+              />
+            </mesh>
+          )}
+
+          {/* Frozen effect */}
+          {isFrozen && (
+            <mesh position={[0, 0.15, 0]}>
+              <sphereGeometry args={[0.4, 16, 16]} />
+              <meshStandardMaterial 
+                color="#D0F8FF"
+                emissive="#00BFFF"
+                emissiveIntensity={0.4}
+                transparent
+                opacity={0.3}
+              />
+            </mesh>
+          )}
+
+          {/* Pouring effect */}
+          {isPouring && (
+            <group position={[0.5, 0.3, 0]}>
+              {/* Liquid stream */}
+              <mesh rotation={[0, 0, -Math.PI/4]}>
+                <coneGeometry args={[0.05, 0.3, 8]} />
+                <meshStandardMaterial 
+                  color="#4169E1" 
+                  transparent 
+                  opacity={0.7}
+                  emissive="#4169E1"
+                  emissiveIntensity={0.2}
+                />
+              </mesh>
+              {/* Droplets */}
+              {[...Array(3)].map((_, i) => (
+                <mesh key={i} position={[0.2 + i * 0.1, -0.1 - i * 0.05, 0]}>
+                  <sphereGeometry args={[0.02, 8, 8]} />
+                  <meshStandardMaterial 
+                    color="#4169E1" 
+                    transparent 
+                    opacity={0.8}
+                    emissive="#4169E1"
+                    emissiveIntensity={0.3}
+                  />
+                </mesh>
+              ))}
+            </group>
+          )}
+
+          {/* Selection highlight */}
+          {isSelected && (
+            <mesh position={[0, 0, 0]}>
+              <cylinderGeometry args={[0.42, 0.42, 0.8, 32]} />
+              <meshStandardMaterial 
+                color="#FFD700" 
+                wireframe 
+                opacity={0.8}
+                transparent
+              />
+            </mesh>
+          )}
+
+          {/* Drag indicator */}
+          {isDragging && (
+            <mesh position={[0, 0.8, 0]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial 
+                color="#00FF00" 
+                emissive="#00FF00"
+                emissiveIntensity={0.5}
+              />
+            </mesh>
+          )}
+
+          {/* Hover tooltip */}
+          {isHovered && (
+            <Html position={[0, 0.6, 0]}>
+              <div style={{
+                background: 'rgba(0,0,0,0.8)',
+                color: '#FFFFFF',
+                padding: '6px 10px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontFamily: 'Arial, sans-serif',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+                border: '1px solid #CCCCCC'
+              }}>
+                Beaker {id} - ISO 384 Standard | R: Raise | F: Lower | E: Pour | C: Cool | H: Heat
+                <div>Water Level: {Math.round(waterLevel * 100)}%</div>
+                {isHeating && <div style={{color: '#FF6347'}}>🔥 Heating</div>}
+                {isCooling && <div style={{color: '#00BFFF'}}>❄️ Cooling</div>}
+                {isFrozen && <div style={{color: '#00BFFF'}}>🧊 Frozen</div>}
+                {isPouring && <div style={{color: '#4169E1'}}>💧 Pouring</div>}
+                {isDragging && <div style={{color: '#00FF00'}}>🖱️ Dragging</div>}
+              </div>
+            </Html>
+          )}
+        </>
       )}
     </group>
   );
 }
 
 // Interactive Flask with drag functionality and water levels
-function InteractiveFlask({ id, initialPosition, color = '#FFE4B5', onSelect, isSelected, isHeating, isCooling, isPouring, onDragStart, onDragEnd, onPositionUpdate, waterLevel = 0.3, isUncapped = false }) {
+function InteractiveFlask({ id, initialPosition, color = '#FFE4B5', onSelect, isSelected, isHeating, isCooling, isPouring, onDragStart, onDragEnd, onPositionUpdate, waterLevel = 0.3, isUncapped = false, isBroken, isFrozen }) {
   const groupRef = useRef();
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -226,13 +269,15 @@ function InteractiveFlask({ id, initialPosition, color = '#FFE4B5', onSelect, is
       ref={groupRef} 
       position={initialPosition}
       onClick={(e) => {
-        e.stopPropagation();
-        onSelect(id);
+        if (!isBroken) {
+          e.stopPropagation();
+          onSelect(id);
+        }
       }}
       onPointerOver={() => setIsHovered(true)}
       onPointerOut={() => setIsHovered(false)}
       onPointerDown={(e) => {
-        if (isSelected) {
+        if (isSelected && !isBroken) {
           e.stopPropagation();
           setIsDragging(true);
           onDragStart(id);
@@ -246,150 +291,191 @@ function InteractiveFlask({ id, initialPosition, color = '#FFE4B5', onSelect, is
         }
       }}
     >
-      {/* Flask body */}
-      <mesh position={[0, 0.15, 0]}>
-        <sphereGeometry args={[0.3, 32, 32]} />
-        <meshStandardMaterial 
-          color={color} 
-          transparent 
-          opacity={0.65}
-          roughness={0.1}
-          metalness={0.05}
-          emissive={isHeating ? '#FF4500' : isCooling ? '#00BFFF' : '#000000'}
-          emissiveIntensity={isHeating || isCooling ? 0.3 : 0}
-        />
-      </mesh>
-
-      {/* Water level */}
-      {waterLevel > 0 && (
-        <mesh position={[0, -0.15 + (waterLevel * 0.45 + 0.02) / 2, 0]}>
-          <cylinderGeometry args={[0.22, 0.22, waterLevel * 0.45 + 0.02, 32]} />
-          <meshStandardMaterial 
-            color="#5EC8FF" 
-            transparent 
-            opacity={0.65}
-            emissive="#56B8FF"
-            emissiveIntensity={0.08}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
-
-      {/* Flask neck */}
-      <mesh position={[0, 0.55, 0]}>
-        <cylinderGeometry args={[0.12, 0.18, 0.4, 24]} />
-        <meshStandardMaterial 
-          color={color} 
-          transparent 
-          opacity={0.65}
-          roughness={0.1}
-        />
-      </mesh>
-
-      {/* Cap/Stopper */}
-      {!isUncapped ? (
-        <mesh position={[0, 0.8, 0]}>
-          <coneGeometry args={[0.12, 0.15, 16]} />
-          <meshStandardMaterial color="#8B4513" />
-        </mesh>
-      ) : (
-        <mesh position={[0, 0.8, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.14, 0.02, 16, 24]} />
-          <meshStandardMaterial color="#888888" metalness={0.4} roughness={0.3} />
-        </mesh>
-      )}
-
-      {/* Temperature effects */}
-      {(isHeating || isCooling) && (
-        <mesh position={[0, 0.15, 0]}>
-          <sphereGeometry args={[0.35, 16, 16]} />
-          <meshStandardMaterial 
-            color={isHeating ? '#FF6347' : '#87CEEB'}
-            emissive={isHeating ? '#FF4500' : '#00BFFF'}
-            emissiveIntensity={0.5}
-            transparent
-            opacity={0.3}
-          />
-        </mesh>
-      )}
-
-      {/* Pouring effect */}
-      {isPouring && (
-        <group position={[0.4, 0.4, 0]}>
-          {/* Liquid stream */}
-          <mesh rotation={[0, 0, -Math.PI/6]}>
-            <coneGeometry args={[0.04, 0.25, 8]} />
-            <meshStandardMaterial 
-              color="#DC143C" 
-              transparent 
-              opacity={0.7}
-              emissive="#DC143C"
-              emissiveIntensity={0.2}
-            />
-          </mesh>
-          {/* Droplets */}
-          {[...Array(3)].map((_, i) => (
-            <mesh key={i} position={[0.15 + i * 0.08, -0.08 - i * 0.04, 0]}>
-              <sphereGeometry args={[0.015, 8, 8]} />
-              <meshStandardMaterial 
-                color="#DC143C" 
-                transparent 
-                opacity={0.8}
-                emissive="#DC143C"
-                emissiveIntensity={0.3}
-              />
+      {/* Broken glass effect */}
+      {isBroken ? (
+        <>
+          {/* Shattered fragments */}
+          {[...Array(5)].map((_, i) => (
+            <mesh key={i} position={[Math.random() * 0.35 - 0.175, Math.random() * 0.2, Math.random() * 0.35 - 0.175]}>
+              <boxGeometry args={[0.09, 0.1, 0.045]} />
+              <meshStandardMaterial color="#808080" opacity={0.6} transparent />
             </mesh>
           ))}
-        </group>
-      )}
+          <Html position={[0, 0.6, 0]}>
+            <div style={{
+              color: '#FF0000',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              background: 'rgba(0,0,0,0.8)',
+              padding: '4px 8px',
+              borderRadius: '3px',
+              pointerEvents: 'none'
+            }}>💔 BROKEN</div>
+          </Html>
+        </>
+      ) : (
+        <>
+          {/* Flask body */}
+          <mesh position={[0, 0.15, 0]}>
+            <sphereGeometry args={[0.3, 32, 32]} />
+            <meshStandardMaterial 
+              color={isFrozen ? '#B0E0E6' : color}
+              transparent 
+              opacity={0.65}
+              roughness={0.1}
+              metalness={0.05}
+              emissive={isHeating ? '#FF4500' : isCooling || isFrozen ? '#00BFFF' : '#000000'}
+              emissiveIntensity={isHeating || isCooling || isFrozen ? 0.3 : 0}
+            />
+          </mesh>
 
-      {/* Selection highlight */}
-      {isSelected && (
-        <mesh position={[0, 0.15, 0]}>
-          <sphereGeometry args={[0.38, 32, 32]} />
-          <meshStandardMaterial 
-            color="#00FF00" 
-            wireframe 
-            opacity={0.8}
-            transparent
-          />
-        </mesh>
-      )}
+          {/* Water level */}
+          {waterLevel > 0 && (
+            <mesh position={[0, -0.15 + (waterLevel * 0.45 + 0.02) / 2, 0]}>
+              <cylinderGeometry args={[0.22, 0.22, waterLevel * 0.45 + 0.02, 32]} />
+              <meshStandardMaterial 
+                color={isFrozen ? '#87CEEB' : '#5EC8FF'}
+                transparent 
+                opacity={isFrozen ? 0.6 : 0.65}
+                emissive={isFrozen ? '#00BFFF' : '#56B8FF'}
+                emissiveIntensity={isFrozen ? 0.2 : 0.08}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          )}
 
-      {/* Drag indicator */}
-      {isDragging && (
-        <mesh position={[0, 0.9, 0]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial 
-            color="#00FF00" 
-            emissive="#00FF00"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-      )}
+          {/* Flask neck */}
+          <mesh position={[0, 0.55, 0]}>
+            <cylinderGeometry args={[0.12, 0.18, 0.4, 24]} />
+            <meshStandardMaterial 
+              color={isFrozen ? '#B0E0E6' : color}
+              transparent 
+              opacity={0.65}
+              roughness={0.1}
+            />
+          </mesh>
 
-      {/* Hover tooltip */}
-      {isHovered && (
-        <Html position={[0, 0.9, 0]}>
-          <div style={{
-            background: 'rgba(0,0,0,0.8)',
-            color: '#FFFFFF',
-            padding: '6px 10px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontFamily: 'Arial, sans-serif',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            border: '1px solid #CCCCCC'
-          }}>
-            Erlenmeyer Flask {id} - ISO 1773 Standard | R: Raise | F: Lower | E: Pour | C: Cool | H: Heat
-            <div>Water Level: {Math.round(waterLevel * 100)}%</div>
-            {isHeating && <div style={{color: '#FF6347'}}>🔥 Heating</div>}
-            {isCooling && <div style={{color: '#00BFFF'}}>❄️ Cooling</div>}
-            {isPouring && <div style={{color: '#DC143C'}}>💧 Pouring</div>}
-            {isDragging && <div style={{color: '#00FF00'}}>🖱️ Dragging</div>}
-          </div>
-        </Html>
+          {/* Cap/Stopper */}
+          {!isUncapped ? (
+            <mesh position={[0, 0.8, 0]}>
+              <coneGeometry args={[0.12, 0.15, 16]} />
+              <meshStandardMaterial color="#8B4513" />
+            </mesh>
+          ) : (
+            <mesh position={[0, 0.8, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.14, 0.02, 16, 24]} />
+              <meshStandardMaterial color="#888888" metalness={0.4} roughness={0.3} />
+            </mesh>
+          )}
+
+          {/* Temperature effects */}
+          {(isHeating || isCooling) && (
+            <mesh position={[0, 0.15, 0]}>
+              <sphereGeometry args={[0.35, 16, 16]} />
+              <meshStandardMaterial 
+                color={isHeating ? '#FF6347' : '#87CEEB'}
+                emissive={isHeating ? '#FF4500' : '#00BFFF'}
+                emissiveIntensity={0.5}
+                transparent
+                opacity={0.3}
+              />
+            </mesh>
+          )}
+
+          {/* Frozen effect */}
+          {isFrozen && (
+            <mesh position={[0, 0.15, 0]}>
+              <sphereGeometry args={[0.35, 16, 16]} />
+              <meshStandardMaterial 
+                color="#D0F8FF"
+                emissive="#00BFFF"
+                emissiveIntensity={0.4}
+                transparent
+                opacity={0.3}
+              />
+            </mesh>
+          )}
+
+          {/* Pouring effect */}
+          {isPouring && (
+            <group position={[0.4, 0.4, 0]}>
+              {/* Liquid stream */}
+              <mesh rotation={[0, 0, -Math.PI/6]}>
+                <coneGeometry args={[0.04, 0.25, 8]} />
+                <meshStandardMaterial 
+                  color="#DC143C" 
+                  transparent 
+                  opacity={0.7}
+                  emissive="#DC143C"
+                  emissiveIntensity={0.2}
+                />
+              </mesh>
+              {/* Droplets */}
+              {[...Array(3)].map((_, i) => (
+                <mesh key={i} position={[0.15 + i * 0.08, -0.08 - i * 0.04, 0]}>
+                  <sphereGeometry args={[0.015, 8, 8]} />
+                  <meshStandardMaterial 
+                    color="#DC143C" 
+                    transparent 
+                    opacity={0.8}
+                    emissive="#DC143C"
+                    emissiveIntensity={0.3}
+                  />
+                </mesh>
+              ))}
+            </group>
+          )}
+
+          {/* Selection highlight */}
+          {isSelected && (
+            <mesh position={[0, 0.15, 0]}>
+              <sphereGeometry args={[0.38, 32, 32]} />
+              <meshStandardMaterial 
+                color="#00FF00" 
+                wireframe 
+                opacity={0.8}
+                transparent
+              />
+            </mesh>
+          )}
+
+          {/* Drag indicator */}
+          {isDragging && (
+            <mesh position={[0, 0.9, 0]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial 
+                color="#00FF00" 
+                emissive="#00FF00"
+                emissiveIntensity={0.5}
+              />
+            </mesh>
+          )}
+
+          {/* Hover tooltip */}
+          {isHovered && (
+            <Html position={[0, 0.9, 0]}>
+              <div style={{
+                background: 'rgba(0,0,0,0.8)',
+                color: '#FFFFFF',
+                padding: '6px 10px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontFamily: 'Arial, sans-serif',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+                border: '1px solid #CCCCCC'
+              }}>
+                Erlenmeyer Flask {id} - ISO 1773 Standard | R: Raise | F: Lower | E: Pour | C: Cool | H: Heat
+                <div>Water Level: {Math.round(waterLevel * 100)}%</div>
+                {isHeating && <div style={{color: '#FF6347'}}>🔥 Heating</div>}
+                {isCooling && <div style={{color: '#00BFFF'}}>❄️ Cooling</div>}
+                {isFrozen && <div style={{color: '#00BFFF'}}>🧊 Frozen</div>}
+                {isPouring && <div style={{color: '#DC143C'}}>💧 Pouring</div>}
+                {isDragging && <div style={{color: '#00FF00'}}>🖱️ Dragging</div>}
+              </div>
+            </Html>
+          )}
+        </>
       )}
     </group>
   );
@@ -399,6 +485,26 @@ function InteractiveFlask({ id, initialPosition, color = '#FFE4B5', onSelect, is
 function ModernLabBench() {
   return (
     <group>
+      {/* FLOOR */}
+      <mesh position={[0, -0.05, 0]}>
+        <boxGeometry args={[14, 0.1, 7]} />
+        <meshStandardMaterial 
+          color="#4A4A4A" 
+          metalness={0.3}
+          roughness={0.7}
+        />
+      </mesh>
+
+      {/* CEILING */}
+      <mesh position={[0, 3.2, 0]}>
+        <boxGeometry args={[14, 0.1, 7]} />
+        <meshStandardMaterial 
+          color="#E0E0E0" 
+          metalness={0.2}
+          roughness={0.5}
+        />
+      </mesh>
+
       {/* Main counter top */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[12, 0.08, 5]} />
@@ -494,7 +600,7 @@ function LabWalls() {
 }
 
 // HUD Instructions
-function LabHUD({ selectedItem, currentAction, glasswareStates, waterLevels, tapOn, uncappedState }) {
+function LabHUD({ selectedItem, currentAction, glasswareStates, waterLevels, tapOn, uncappedState, temperature }) {
   const getSelectedItemState = () => {
     if (!selectedItem) return null;
     return glasswareStates[selectedItem];
@@ -533,13 +639,20 @@ function LabHUD({ selectedItem, currentAction, glasswareStates, waterLevels, tap
       <div>⑪ <strong>H</strong> - Heat/Boil</div>
       <div>⑫ <strong>Mouse</strong> - Rotate view</div>
       <div style={{ marginTop: '8px', marginBottom: '8px' }}>━━━━━━━━━━━━━━━━━━━</div>
-      <div style={{ color: '#FFD700' }}>ISO Standards Compliant</div>
+      <div style={{ color: '#FFD700' }}>Physics Features: Floor | Ceiling | Breaking (Drop) | Evaporation | Freezing</div>
       {selectedItem && (
         <div style={{ marginTop: '8px', color: '#00FF00' }}>
           Selected: <strong>{selectedItem}</strong>
           <div>Water Level: <strong>{Math.round(waterLevels[selectedItem] * 100)}%</strong></div>
+          <div>Temperature: <strong>{Math.round(temperature[selectedItem])}°C</strong></div>
           {selectedItem.startsWith('F') && (
-            <div>{uncappedState[selectedItem] ? 'Flask uncapped' : 'Flask capped'}</div>
+            <div>{glasswareStates[selectedItem].broken ? '💔 BROKEN - Cannot use!' : uncappedState[selectedItem] ? '🔓 Flask uncapped' : '🔒 Flask capped'}</div>
+          )}
+          {glasswareStates[selectedItem].broken && (
+            <div style={{color: '#FF4444'}}>⚠️ BROKEN - Replace for use</div>
+          )}
+          {glasswareStates[selectedItem].frozen && (
+            <div style={{color: '#00BFFF'}}>🧊 Frozen - Thaw to use</div>
           )}
         </div>
       )}
@@ -600,6 +713,8 @@ function LabSceneContent({ selectedItem, onSelectItem, glasswarePositions, glass
         onDragEnd={onDragEnd}
         onPositionUpdate={onPositionUpdate}
         waterLevel={waterLevels.B1}
+        isBroken={glasswareStates.B1.broken}
+        isFrozen={glasswareStates.B1.frozen}
       />
       <InteractiveBeaker 
         id="B2" 
@@ -614,6 +729,8 @@ function LabSceneContent({ selectedItem, onSelectItem, glasswarePositions, glass
         onDragEnd={onDragEnd}
         onPositionUpdate={onPositionUpdate}
         waterLevel={waterLevels.B2}
+        isBroken={glasswareStates.B2.broken}
+        isFrozen={glasswareStates.B2.frozen}
       />
       <InteractiveBeaker 
         id="B3" 
@@ -628,6 +745,8 @@ function LabSceneContent({ selectedItem, onSelectItem, glasswarePositions, glass
         onDragEnd={onDragEnd}
         onPositionUpdate={onPositionUpdate}
         waterLevel={waterLevels.B3}
+        isBroken={glasswareStates.B3.broken}
+        isFrozen={glasswareStates.B3.frozen}
       />
       
       <InteractiveFlask 
@@ -644,6 +763,8 @@ function LabSceneContent({ selectedItem, onSelectItem, glasswarePositions, glass
         onPositionUpdate={onPositionUpdate}
         waterLevel={waterLevels.F1}
         isUncapped={uncappedState.F1}
+        isBroken={glasswareStates.F1.broken}
+        isFrozen={glasswareStates.F1.frozen}
       />
       <InteractiveFlask 
         id="F2" 
@@ -659,6 +780,8 @@ function LabSceneContent({ selectedItem, onSelectItem, glasswarePositions, glass
         onPositionUpdate={onPositionUpdate}
         waterLevel={waterLevels.F2}
         isUncapped={uncappedState.F2}
+        isBroken={glasswareStates.F2.broken}
+        isFrozen={glasswareStates.F2.frozen}
       />
 
       {/* Grid reference */}
@@ -691,11 +814,11 @@ function Experiment() {
   const [currentAction, setCurrentAction] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [glasswareStates, setGlasswareStates] = useState({
-    B1: { heating: false, cooling: false, pouring: false },
-    B2: { heating: false, cooling: false, pouring: false },
-    B3: { heating: false, cooling: false, pouring: false },
-    F1: { heating: false, cooling: false, pouring: false },
-    F2: { heating: false, cooling: false, pouring: false }
+    B1: { heating: false, cooling: false, pouring: false, broken: false, frozen: false },
+    B2: { heating: false, cooling: false, pouring: false, broken: false, frozen: false },
+    B3: { heating: false, cooling: false, pouring: false, broken: false, frozen: false },
+    F1: { heating: false, cooling: false, pouring: false, broken: false, frozen: false },
+    F2: { heating: false, cooling: false, pouring: false, broken: false, frozen: false }
   });
   const [glasswarePositions, setGlasswarePositions] = useState({
     B1: [-3, 0.1, -1],
@@ -720,11 +843,134 @@ function Experiment() {
     F2: false
   });
   const [animatingItems, setAnimatingItems] = useState(new Set()); // Track animating items
+  const [previousPositions, setPreviousPositions] = useState(glasswarePositions); // Track for velocity
+  const [temperature, setTemperature] = useState({
+    B1: 20, B2: 20, B3: 20, F1: 20, F2: 20 // Celsius
+  });
+  const FLOOR_Y = 0; // Floor level
+  const CEILING_Y = 3; // Ceiling level
+  const BREAK_VELOCITY = 0.8; // Velocity threshold for breaking
+  const EVAPORATION_RATE = 0.001; // Water loss per frame when uncapped or heating
+  const FREEZE_TEMPERATURE = 0; // Freezing point in Celsius
 
   const handleSelectItem = (id) => {
     setSelectedItem(selectedItem === id ? null : id);
     setCurrentAction(null); // Clear action when selecting new item
   };
+
+  // Update temperature based on heating/cooling
+  const updateTemperature = useCallback(() => {
+    setTemperature(prev => {
+      const newTemp = { ...prev };
+      Object.keys(newTemp).forEach(id => {
+        if (glasswareStates[id].heating) {
+          newTemp[id] = Math.min(100, newTemp[id] + 2); // Heat up
+        } else if (glasswareStates[id].cooling) {
+          newTemp[id] = Math.max(-10, newTemp[id] - 1.5); // Cool down
+        } else {
+          // Natural cooling to room temperature (20°C)
+          newTemp[id] += (20 - newTemp[id]) * 0.02;
+        }
+      });
+      return newTemp;
+    });
+  }, [glasswareStates]);
+
+  // Check for evaporation and freezing
+  useEffect(() => {
+    const evaporationInterval = setInterval(() => {
+      setWaterLevels(prev => {
+        const newLevels = { ...prev };
+        Object.keys(newLevels).forEach(id => {
+          if (glasswareStates[id].broken) return; // Don't evaporate from broken glass
+          
+          let evapRate = EVAPORATION_RATE;
+          
+          // Uncapped containers evaporate faster
+          if (uncappedState[id]) {
+            evapRate *= 2;
+          }
+          
+          // Heating increases evaporation significantly
+          if (glasswareStates[id].heating && temperature[id] > 50) {
+            evapRate *= 5;
+            newLevels[id] = Math.max(0, newLevels[id] - evapRate);
+          } else {
+            newLevels[id] = Math.max(0, newLevels[id] - evapRate);
+          }
+        });
+        return newLevels;
+      });
+
+      // Check for freezing
+      setWaterLevels(prev => {
+        const newLevels = { ...prev };
+        Object.keys(newLevels).forEach(id => {
+          if (temperature[id] <= FREEZE_TEMPERATURE && newLevels[id] > 0) {
+            setGlasswareStates(s => ({
+              ...s,
+              [id]: { ...s[id], frozen: true }
+            }));
+          } else if (temperature[id] > FREEZE_TEMPERATURE) {
+            setGlasswareStates(s => ({
+              ...s,
+              [id]: { ...s[id], frozen: false }
+            }));
+          }
+        });
+        return newLevels;
+      });
+
+      updateTemperature();
+    }, 500);
+
+    return () => clearInterval(evaporationInterval);
+  }, [uncappedState, glasswareStates, temperature, updateTemperature]);
+
+  // Check for boundary collisions and overflow
+  const checkBoundaries = useCallback((id, position) => {
+    const pos = [...position];
+    let hitBoundary = false;
+
+    // Floor collision (bouncing)
+    if (pos[1] < FLOOR_Y) {
+      pos[1] = FLOOR_Y;
+      hitBoundary = true;
+    }
+
+    // Ceiling collision
+    if (pos[1] > CEILING_Y) {
+      pos[1] = CEILING_Y;
+      hitBoundary = true;
+    }
+
+    // Check for breaking on hard impact
+    if (hitBoundary && previousPositions[id]) {
+      const velocityY = Math.abs(previousPositions[id][1] - position[1]);
+      if (velocityY > BREAK_VELOCITY) {
+        setGlasswareStates(prev => ({
+          ...prev,
+          [id]: { ...prev[id], broken: true }
+        }));
+        setCurrentAction(`${id} broke on impact!`);
+        setTimeout(() => setCurrentAction(null), 2000);
+      }
+    }
+
+    return pos;
+  }, [previousPositions]);
+
+  // Check water overflow
+  const checkOverflow = useCallback((id) => {
+    if (waterLevels[id] > 1.0) {
+      setWaterLevels(prev => ({
+        ...prev,
+        [id]: 1.0
+      }));
+      setCurrentAction(`${id} is overflowing!`);
+      setTimeout(() => setCurrentAction(null), 1500);
+    }
+  }, [waterLevels]);
 
   const handleDragStart = (id) => {
     if (selectedItem === id) {
@@ -841,10 +1087,22 @@ function Experiment() {
   };
 
   const updatePosition = (id, newPosition) => {
+    // Check boundaries before updating
+    const boundedPos = checkBoundaries(id, newPosition);
+    
+    // Track previous position for velocity calculation
+    setPreviousPositions(prev => ({
+      ...prev,
+      [id]: boundedPos
+    }));
+
     setGlasswarePositions(prev => ({
       ...prev,
-      [id]: newPosition
+      [id]: boundedPos
     }));
+
+    // Check for overflow after position change
+    checkOverflow(id);
   };
 
   useEffect(() => {
@@ -1021,7 +1279,7 @@ function Experiment() {
 
   return (
     <div style={{ height: '100vh', width: '100%', background: '#e8e8e8', position: 'relative' }}>
-      <LabHUD selectedItem={selectedItem} currentAction={currentAction} glasswareStates={glasswareStates} waterLevels={waterLevels} tapOn={tapOn} uncappedState={uncappedState} />
+      <LabHUD selectedItem={selectedItem} currentAction={currentAction} glasswareStates={glasswareStates} waterLevels={waterLevels} tapOn={tapOn} uncappedState={uncappedState} temperature={temperature} />
       <Canvas 
         camera={{ position: [8, 4, 8], fov: 50 }}
         style={{ background: 'linear-gradient(to bottom, #e8e8e8 0%, #d0d0d0 100%)' }}
